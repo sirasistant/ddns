@@ -57,7 +57,7 @@ var hexToIpv4=function(hex){
 	var bytes = hex.substring(2,hex.length);
 	for(var i =0;i<(bytes.length);i+=2){
 		var byte = "0x"+bytes.substring(i,i+2);
-		result.push(parseInt(byte);
+		result.push(parseInt(byte));
 	}
 	return result.join(".");
 }
