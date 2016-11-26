@@ -102,25 +102,56 @@ var resolve=function(contract,host,callback,errBack){
 				console.log("Domain: "+ethDomain.hexEncode());
 				console.log("SubDomain: "+ethSubdomain.hexEncode());
 
-				var type = ethDomain?parseInt(contract.getType(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():"").toString()):0;
-				console.log("Type: "+type);
-				if(type){
-					if(type ==1){
-						var newHost = contract.getAlias(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():"");
-						step(newHost);
-					}else{
-						if(type==2){
-							var resolvedAddr = hexToIpv4(contract.getIPV4(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():""));
-							callback(resolvedAddr);
+				var type = 0;
+
+				var afterTypeResolved = function(){
+					console.log("Type: "+type); //0 means is not from the smart contract, 1 is cname , 2 is ipv4 and 3 is ipv6
+					if(type){
+						if(type ==1){ //obtain the alias asynchronously and try to resolve it 
+							contract.getAlias(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():"",function(err,newHost){
+								if(err){
+									console.log(err);
+									errBack();
+								}else{
+									step(newHost);
+								}
+							});
 						}else{
-							errBack();
+							if(type==2){
+								contract.getIPV4(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():"",function(err,ipv4){
+									if(err){
+										console.log(err);
+										errBack();
+									}else{
+										var resolvedAddr = hexToIpv4(ipv4); //Ipv4 obtained, we have finished the resolution
+										callback(resolvedAddr);
+									}
+								});
+							}else{
+								errBack(); //Ipv6 is not supported yet
+							}
 						}
+					}else{
+						callback(host); //if type is zero, we cant resolve it using the smart contract so we are done here.
 					}
-				}else{
-					callback(host);
 				}
+
+				if(ethDomain){ //If the domain can be a smart contract one, try to get its type.
+					contract.getType(ethDomain.hexEncode(),ethSubdomain.length>0?ethSubdomain.hexEncode():"",function(err,result){
+						if(err){
+							console.log(err);
+							errBack();
+						}else{
+							type = parseInt(result.toString());
+							afterTypeResolved();
+						}
+					});
+				}else{ //Call with the default type, 0
+					afterTypeResolved();
+				}
+
 			}else{
-				callback(host);
+				callback(host); //if it is not ASCII, we cannot resolve it. not our problem.
 			}
 		}
 	}
@@ -132,8 +163,8 @@ var resolve=function(contract,host,callback,errBack){
 
 var server = http.createServer(function(req, res) {
   var host = req.headers['host']; //get the host of the request
-  var port = 80;
-  var twoPointsIndex = host.indexOf(":");
+  var port = 80; //default http port
+  var twoPointsIndex = host.indexOf(":"); 
   if(twoPointsIndex>-1){
   	port = host.substring(twoPointsIndex+1,host.length);
   	host = host.slice(0,twoPointsIndex);
@@ -141,18 +172,16 @@ var server = http.createServer(function(req, res) {
   console.log("--------------");
   console.log(host+":"+port);
 
-  resolve(contract,host,(result)=>{
+  resolve(contract,host,(result)=>{ //callback
   	console.log("Resolved: ",result);
   	proxy.web(req, res, { target: "http://"+result+":"+port }, function(e) { 
-  		res.statusCode=404;
+  		res.statusCode=404; //proxy error (the site is down, for example)
   		res.end();
   	});
-  },()=>{
+  },()=>{ //errorback
   	res.statusCode=404;
   	res.end();
   });
-
-
 });
 
 proxy.on('error', function(e) {
@@ -161,3 +190,11 @@ proxy.on('error', function(e) {
 
 console.log("listening on port "+config.port)
 server.listen(config.port);
+
+
+
+
+
+
+
+
