@@ -28,6 +28,9 @@ contract DDNS is mortal{
         mapping(bytes32=>entry) subdomains;
         address owner;
     }
+
+    event domainRegistered(address owner,bytes32 domain);
+    event subDomainRegistered(address owner,bytes32 domain,bytes32 subDomain);
     
     mapping(bytes32=>domain) public domains;
     
@@ -41,6 +44,7 @@ contract DDNS is mortal{
             throw;
         }
         domains[domain].owner = msg.sender;
+        domainRegistered(msg.sender, domain);
     }
     
     modifier isOwnerOfDomain(domain _domain){ 
@@ -50,16 +54,19 @@ contract DDNS is mortal{
     function storeCNAME(bytes32 domainName,bytes32 subdomain,string cname) isOwnerOfDomain(domains[domainName]) {
         domain _domain = domains[domainName];
         _domain.subdomains[subdomain] = entry({typeOfEntry:CNAME_ENTRY,alias:cname,ipv4:0,ipv6:0});
+        subDomainRegistered(msg.sender,domainName,subdomain);
     }
     
     function storeIPV6(bytes32 domainName,bytes32 subdomain,bytes16 ipv6) isOwnerOfDomain(domains[domainName]) {
         domain _domain = domains[domainName];
-        _domain.subdomains[subdomain] = entry({typeOfEntry:IPV6_ENTRY,alias:"asd",ipv4:0,ipv6:ipv6});
+        _domain.subdomains[subdomain] = entry({typeOfEntry:IPV6_ENTRY,alias:"",ipv4:0,ipv6:ipv6});
+        subDomainRegistered(msg.sender,domainName,subdomain);
     }
     
     function storeIPV4(bytes32 domainName,bytes32 subdomain,bytes4 ipv4) isOwnerOfDomain(domains[domainName]) {
         domain _domain = domains[domainName];
-        _domain.subdomains[subdomain] = entry({typeOfEntry:IPV4_ENTRY,alias:"asd",ipv4:ipv4,ipv6:0});
+        _domain.subdomains[subdomain] = entry({typeOfEntry:IPV4_ENTRY,alias:"",ipv4:ipv4,ipv6:0});
+        subDomainRegistered(msg.sender,domainName,subdomain);
     }
     
     function getType(bytes32 domainName,bytes32 subdomain) constant returns(uint){

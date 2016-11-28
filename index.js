@@ -79,6 +79,9 @@ var splitDomain = function(url){
 	return null;
 }
 
+//cache
+var cache = {};
+
 // The function that resolves recursively an address 
 var resolve=function(contract,host,callback,errBack){
 	var hostNames = []; //This array prevents loops in CNAME resolution
@@ -172,16 +175,34 @@ var server = http.createServer(function(req, res) {
   console.log("--------------");
   console.log(host+":"+port);
 
-  resolve(contract,host,(result)=>{ //callback
+  var afterResolved = (result)=>{ //callback
+  	cache[host] = {
+  		result:result,
+  		endDate:(new Date()).getTime() + config.cacheMinutes*60*1000
+  	}
   	console.log("Resolved: ",result);
   	proxy.web(req, res, { target: "http://"+result+":"+port }, function(e) { 
-  		res.statusCode=404; //proxy error (the site is down, for example)
-  		res.end();
-  	});
-  },()=>{ //errorback
-  	res.statusCode=404;
-  	res.end();
-  });
+		res.statusCode=404; //proxy error (the site is down, for example)
+		res.end();
+	});
+  };
+
+   var afterCached = (result)=>{ //callback
+  	console.log("Cached: ",result);
+  	proxy.web(req, res, { target: "http://"+result+":"+port }, function(e) { 
+		res.statusCode=404; //proxy error (the site is down, for example)
+		res.end();
+	});
+  };
+
+  if(cache[host]&&cache[host].endDate>new Date()){
+  	afterCached(cache[host].result);
+  }else{
+	  resolve(contract,host,afterResolved,()=>{ //errorback
+	  	res.statusCode=404;
+	  	res.end();
+	  });
+	}
 });
 
 proxy.on('error', function(e) {
